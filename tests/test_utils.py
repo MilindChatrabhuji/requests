@@ -570,10 +570,30 @@ def test_select_proxies(url, expected, proxies):
     (
         ('foo="is a fish", bar="as well"', {"foo": "is a fish", "bar": "as well"}),
         ("key_without_value", {"key_without_value": None}),
+        (" key_without_value ", {"key_without_value": None}),
+        ('realm = "test", nonce = "abc", qop="auth"', {"realm": "test", "nonce": "abc", "qop": "auth"}),
+        ('a = b, c= d , e =f', {"a": "b", "c": "d", "e": "f"}),
     ),
 )
 def test_parse_dict_header(value, expected):
     assert parse_dict_header(value) == expected
+
+
+def test_parse_dict_header_digest_challenge():
+    """Verify digest challenge parsing with spaces around = (#7651)."""
+    from requests.auth import HTTPDigestAuth
+
+    challenge = 'realm = "test_realm", nonce = "abc123nonce", qop="auth"'
+    chal_dict = parse_dict_header(challenge)
+    assert chal_dict["realm"] == "test_realm"
+    assert chal_dict["nonce"] == "abc123nonce"
+
+    auth = HTTPDigestAuth("user", "pass")
+    auth.init_per_thread_state()
+    auth._thread_local.chal = chal_dict
+    header = auth.build_digest_header("GET", "http://example.com/")
+    assert 'realm="test_realm"' in header
+    assert 'nonce="abc123nonce"' in header
 
 
 @pytest.mark.parametrize(
